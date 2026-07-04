@@ -41,10 +41,17 @@ interface WorkerResponse {
   error?: string
 }
 
-const workerScope = self as unknown as Worker
+const workerScope = type WorkerRequestMessage = WorkerRequest | Uint8Array;
 
-workerScope.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
-  const { id, action, cipherId, input, key, options } = event.data
+self as unknown as Worker
+
+workerScope.addEventListener('message', (event: MessageEvent<WorkerRequestMessage>) => {
+  let requestData = event.data
+  if (requestData instanceof Uint8Array) {
+    const decoder = new TextDecoder()
+    requestData = JSON.parse(decoder.decode(requestData))
+  }
+  const { id, action, cipherId, input, key, options } = requestData as WorkerRequest
 
   try {
     let result: any
@@ -160,7 +167,10 @@ workerScope.addEventListener('message', (event: MessageEvent<WorkerRequest>) => 
     workerScope.postMessage({
       id,
       success: false,
-      error: error?.message || String(error),
+      error: error instanceof Error ? error.message : String(error),
     })
+    const encoder = new TextEncoder()
+    const errorBuffer = encoder.encode(errorPayload)
+    self.postMessage(errorBuffer, [errorBuffer.buffer])
   }
 })
